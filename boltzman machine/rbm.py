@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import numpy as np
 
 class RestrictiveBM(nn.Module):
 
@@ -8,7 +9,8 @@ class RestrictiveBM(nn.Module):
         self.n_visible = n_visible
         self.n_hidden = n_hidden
 
-        self.weights = torch.randn(n_hidden, n_visible)*0.01
+        self.weights = torch.randn(n_hidden, n_visible) * np.sqrt(2.0 / (n_hidden + n_visible))
+
 
         self.h_bias = torch.zeros(n_hidden)
         self.v_bias = torch.zeros(n_visible)
@@ -39,6 +41,14 @@ class RestrictiveBM(nn.Module):
         batch_size = v.size(0)
         
 
-        self.weights += lr * (positive_phase - negative_phase) / batch_size
-        self.v_bias += lr * torch.sum(v - v_sample, dim=0) / batch_size
-        self.h_bias += lr * torch.sum(h_prob - h_sample, dim=0) / batch_size
+        with torch.no_grad():
+         self.weights.data = self.weights + lr * (positive_phase - negative_phase) / batch_size
+         self.v_bias.data = self.v_bias + lr * torch.sum(v - v_sample, dim=0) / batch_size
+         self.h_bias.data = self.h_bias + lr * torch.sum(h_prob - h_sample, dim=0) / batch_size
+    
+
+    def to(self, device):
+        self.weights = nn.Parameter(self.weights.to(device))
+        self.h_bias = nn.Parameter(self.h_bias.to(device))
+        self.v_bias = nn.Parameter(self.v_bias.to(device))
+        return self
