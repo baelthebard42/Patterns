@@ -3,7 +3,6 @@ import torch
 import os
 from PIL import Image
 
-START = 0
 
 class PatternDB(Dataset):
 
@@ -17,7 +16,7 @@ class PatternDB(Dataset):
         return len(os.listdir(self.data_path))
     
     def __getitem__(self, index):
-     path = os.path.join(self.data_path, f"{START+index}.png")
+     path = os.path.join(self.data_path, f"{index}.jpg")
      image = Image.open(path).convert("RGB")
 
      if self.transform:
