@@ -19,6 +19,7 @@ def sobel_edges(x):
 
 
 def kullback_leibler(mu, log_var):
+     log_var = torch.clamp(log_var, min=-10, max=10)
      return -0.5 * torch.mean(1 + log_var - mu.pow(2) - log_var.exp())
 
 class vae_loss(nn.Module):
@@ -30,9 +31,36 @@ class vae_loss(nn.Module):
         
 
     def forward(self, y_target, y_pred, mu, log_var, beta=1):
+
+        if torch.isnan(y_pred).any():
+          print("NaN detected in reconstructed output, replacing with random constant")
+          random_constant = torch.randn_like(y_pred) * 0.1  
+          y_pred = torch.where(torch.isnan(y_pred), random_constant, y_pred)
+        
+        if torch.isinf(y_pred).any():
+          print("Infinity detected in reconstructed output, replacing with random constant")
+          random_constant = torch.randn_like(y_pred) * 0.1  
+          y_pred = torch.where(torch.isinf(y_pred), random_constant, y_pred)
+
+        assert not torch.isnan(y_target).any(), "y_target contains NaN values"
+        assert not torch.isinf(y_target).any(), "y_target contains inf values"
        
         recon_loss = F.mse_loss(y_pred, y_target, reduction='mean').to(self.device)
         edge_loss = F.mse_loss(sobel_edges(y_pred), sobel_edges(y_target), reduction='mean').to(self.device)
         kl_loss =  kullback_leibler(mu, log_var)
-        total_loss = recon_loss*0.3 + edge_loss*0.7 +  kl_loss*beta
-        return  total_loss, recon_loss, edge_loss, kl_loss
+
+        if torch.isnan(recon_loss):
+         print("NaN detected in recon loss! Stopping training.")
+         return None
+
+        if torch.isnan(kl_loss):
+         print("NaN detected in edge loss! Stopping training.")
+         return None 
+
+        if torch.isnan(edge_loss):
+         print("NaN detected in edge loss! Stopping training.")
+         return None 
+    
+        
+        total_loss = recon_loss*0.8 + edge_loss*0.8 +  kl_loss*beta
+        return  total_loss, recon_loss, edge_loss, kl_loss*beta

@@ -1,6 +1,13 @@
 import torch
 import torch.nn as nn
 
+def calculate_bottleneck_size(input_size, encoder, input_channels, device):
+    dum = torch.randn(32, input_channels, input_size, input_size).to(device)
+
+    for layer in encoder:
+        dum = layer(dum)
+    return dum.shape[1]*dum.shape[2]*dum.shape[3]
+
 
 
 class Conv(nn.Module):
@@ -11,7 +18,7 @@ class Conv(nn.Module):
             
             nn.BatchNorm2d(out_channel),
             nn.ReLU(inplace=True),
-     #       nn.Dropout2d(p=dropout)
+      #      nn.Dropout2d(p=dropout)
         )
         nn.init.xavier_uniform_(self.conv[0].weight)
         nn.init.zeros_(self.conv[0].bias)
@@ -20,13 +27,13 @@ class Conv(nn.Module):
         return self.conv(x)
 
 class DeConv(nn.Module):
-    def __init__(self, in_channel, out_channel, kernel_size, stride=2, padding=1, final_layer=False, dropout=0.3):
+    def __init__(self, in_channel, out_channel, kernel_size, stride=2, padding=1, final_layer=False, dropout=0.2):
         super().__init__()
         layers = [
             nn.ConvTranspose2d(in_channel, out_channel, kernel_size, stride, padding=padding),
             nn.BatchNorm2d(out_channel),
             nn.ReLU(inplace=True),
-    #        nn.Dropout2d(p=dropout)
+     #       nn.Dropout2d(p=dropout)
         ]
         if final_layer:
             layers = [
@@ -55,6 +62,7 @@ class VAE(nn.Module):
         self.padding = padding
         self.kernel_size = kernel_size
         self.stride = stride
+        self.input_channels = in_channel
         
        
         self.encoder = nn.ModuleList().to(self.device)
@@ -73,13 +81,7 @@ class VAE(nn.Module):
         
         self.flatten = nn.Flatten()
 
-    
-
-        for _ in range(len(features)):
-            H = H//2
-          
-
-        bottleneck_size = H * H * self.features[-1]
+        bottleneck_size = calculate_bottleneck_size(input_size=input_size, encoder=self.encoder, input_channels=self.input_channels, device=self.device)
         #bottleneck_size = self.features[-1]
 
      
@@ -159,5 +161,10 @@ class VAE(nn.Module):
         mu, log_var = self.encode(x)
         z = self._reparameterize(mu, log_var)
         reconstructed = self.decode(z)
+
+        if torch.isnan(reconstructed).any():
+          print("NaN detected in reconstructed output, replacing with random constant")
+          random_constant = torch.randn_like(reconstructed) * 0.1 
+          reconstructed = torch.nan_to_num(reconstructed, nan=random_constant)
         
         return reconstructed
